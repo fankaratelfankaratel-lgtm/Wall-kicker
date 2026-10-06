@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>W.D. Gaster - Custom Undertale / Deltarune Boss Fight</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background-color: #030305;
+            color: white;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .pixelated {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .glitch-text {
+            animation: glitch 0.8s infinite;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-3px, 3px) }
+            40% { transform: translate(-3px, -3px) }
+            60% { transform: translate(3px, 3px) }
+            80% { transform: translate(3px, -3px) }
+            100% { transform: translate(0) }
+        }
+        .hp-bar-bg { background-color: #400000; }
+        .hp-bar-fill { background-color: #00ff22; }
+        .ut-hp-fill { background-color: #ffff00; }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        .touch-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .shifting-arena {
+            transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col items-center justify-center p-1 sm:p-2 bg-black">
+
+    <!-- Mode Indicator & Action Header -->
+    <div class="w-full max-w-[800px] flex justify-between items-center mb-1 px-2 text-[9px] sm:text-[11px]">
+        <div id="mode-indicator" class="font-bold flex items-center gap-2">
+            <span>MODE:</span>
+            <span id="mode-text" class="text-red-500">CALCULATING...</span>
+        </div>
+        <div class="flex gap-2">
+            <button id="btn-toggle-mode" class="px-2 py-1 border border-yellow-400 bg-yellow-950/60 hover:bg-yellow-800 text-yellow-300 rounded text-[9px]">
+                Reroll / Toggle Mode (50/50)
+            </button>
+            <button id="btn-restart" class="px-2 py-1 border border-red-500 bg-red-950/60 hover:bg-red-800 text-red-300 rounded text-[9px]">
+                Restart
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN GAME CONTAINER -->
+    <div id="game-container" class="relative w-full max-w-[800px] h-[580px] bg-black border-4 border-gray-800 rounded-lg overflow-hidden flex flex-col justify-between p-2 shadow-[0_0_40px_rgba(255,0,0,0.2)]">
+        
+        <!-- TOP: BOSS DISPLAY AREA -->
+        <div class="relative w-full h-[220px] flex flex-col items-center justify-center border-b-2 border-dashed border-gray-800">
+            <!-- Gaster Health Bar -->
+            <div id="boss-hp-container" class="absolute top-2 left-1/2 -translate-x-1/2 w-[85%] flex flex-col items-center z-10">
+                <div class="flex justify-between w-full text-[10px] sm:text-xs mb-1 text-gray-400 font-bold">
+                    <span id="boss-name" class="text-white tracking-widest">W.D. GASTER</span>
+                    <span id="boss-hp-text" class="text-red-400">100000 / 100000 HP</span>
+                </div>
+                <div class="w-full h-4 hp-bar-bg border border-white rounded-sm overflow-hidden">
+                    <div id="boss-hp-fill" class="h-full hp-bar-fill w-full transition-all duration-200"></div>
+                </div>
+            </div>
+
+            <!-- Boss Canvas (Gaster Sprite, Photoshop Arms/Eyes/Souls) -->
+            <canvas id="bossCanvas" width="790" height="210" class="w-full h-full pixelated"></canvas>
+
+            <!-- Dialogue Bubble -->
+            <div id="dialogue-bubble" class="hidden absolute right-4 top-10 bg-white text-black p-2 rounded-lg border-2 border-black max-w-[220px] text-[8px] sm:text-[10px] z-20 shadow-xl font-bold">
+                <span id="dialogue-text">...</span>
+            </div>
+        </div>
+
+        <!-- MIDDLE: SOUL CANVAS / ACTION ARENA -->
+        <div id="middle-arena-container" class="relative w-full h-[200px] flex items-center justify-center my-1 shifting-arena">
+            <!-- Canvas for Bullet Hell Arena -->
+            <canvas id="arenaCanvas" width="790" height="190" class="w-full h-full bg-black border-4 border-white rounded-md pixelated"></canvas>
+
+            <!-- Cutscene Overlay -->
+            <div id="cutscene-overlay" class="hidden absolute inset-0 bg-black/95 z-30 flex flex-col items-center justify-center p-4 text-center border-4 border-red-600">
+                <p id="cutscene-text" class="text-xs sm:text-sm text-yellow-300 mb-6 leading-relaxed glitch-text">
+                    HE CHANGED THE UI TO UNDERTALE UI!
+                </p>
+                <div class="text-[10px] sm:text-xs text-gray-400 animate-pulse">
+                    Press <span class="text-white border border-white px-2 py-0.5 rounded">[Z]</span> or <span class="text-white border border-white px-2 py-0.5 rounded">[TOUCH]</span> to continue...
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM: USER INTERFACE (DELTARUNE / UNDERTALE MODE) -->
+        <div id="bottom-ui" class="w-full h-[140px] flex flex-col justify-end">
+            
+            <!-- DELTARUNE PARTY PANEL -->
+            <div id="deltarune-ui" class="w-full h-full flex flex-col justify-between">
+                <!-- Action Box -->
+                <div id="dr-action-box" class="w-full h-[38px] border-2 border-white rounded px-2 py-1 text-[9px] sm:text-xs flex items-center bg-black text-white">
+                    <span id="dr-message">* Gaster blocks the way into the void.</span>
+                </div>
+
+                <!-- Party Member Panels -->
+                <div class="grid grid-cols-3 gap-1 sm:gap-2 h-[90px] mt-1">
+                    <!-- KRIS -->
+                    <div id="party-0" class="border-2 border-cyan-400 bg-gray-950 p-1 rounded flex flex-col justify-between relative">
+                        <div class="flex justify-between items-center text-[9px] sm:text-[10px] text-cyan-400 font-bold">
+                            <span>KRIS</span>
+                            <span id="kris-hp-text" class="text-white">120/120</span>
+                        </div>
+                        <div class="dr-menu flex flex-wrap gap-1 text-[8px]">
+                            <button data-act="FIGHT" class="px-1 py-0.5 border border-cyan-500 rounded hover:bg-cyan-900 active:bg-cyan-700">FIGHT</button>
+                            <button data-act="ACT" class="px-1 py-0.5 border border-cyan-500 rounded hover:bg-cyan-900 active:bg-cyan-700">ACT</button>
+                            <button data-act="ITEM" class="px-1 py-0.5 border border-cyan-500 rounded hover:bg-cyan-900 active:bg-cyan-700">ITEM</button>
+                            <button data-act="SPARE" class="px-1 py-0.5 border border-cyan-500 rounded hover:bg-cyan-900 active:bg-cyan-700">SPARE</button>
+                        </div>
+                        <div id="kris-action-status" class="text-[7px] text-cyan-300 italic">Select Action</div>
+                    </div>
+
+                    <!-- SUSIE -->
+                    <div id="party-1" class="border-2 border-pink-500 bg-gray-950 p-1 rounded flex flex-col justify-between relative">
+                        <div class="flex justify-between items-center text-[9px] sm:text-[10px] text-pink-500 font-bold">
+                            <span>SUSIE</span>
+                            <span id="susie-hp-text" class="text-white">140/140</span>
+                        </div>
+                        <div class="dr-menu flex flex-wrap gap-1 text-[8px]">
+                            <button data-act="FIGHT" class="px-1 py-0.5 border border-pink-500 rounded hover:bg-pink-900 active:bg-pink-700">FIGHT</button>
+                            <button data-act="ACT" class="px-1 py-0.5 border border-pink-500 rounded hover:bg-pink-900 active:bg-pink-700">ACT</button>
+                            <button data-act="ITEM" class="px-1 py-0.5 border border-pink-500 rounded hover:bg-pink-900 active:bg-pink-700">ITEM</button>
+                            <button data-act="SPARE" class="px-1 py-0.5 border border-pink-500 rounded hover:bg-pink-900 active:bg-pink-700">SPARE</button>
+                        </div>
+                        <div id="susie-action-status" class="text-[7px] text-pink-300 italic">Waiting...</div>
+                    </div>
+
+                    <!-- RALSEI -->
+                    <div id="party-2" class="border-2 border-green-400 bg-gray-950 p-1 rounded flex flex-col justify-between relative">
+                        <div class="flex justify-between items-center text-[9px] sm:text-[10px] text-green-400 font-bold">
+                            <span>RALSEI</span>
+                            <span id="ralsei-hp-text" class="text-white">100/100</span>
+                        </div>
+                        <div class="dr-menu flex flex-wrap gap-1 text-[8px]">
+                            <button data-act="FIGHT" class="px-1 py-0.5 border border-green-500 rounded hover:bg-green-900 active:bg-green-700">FIGHT</button>
+                            <button data-act="ACT" class="px-1 py-0.5 border border-green-500 rounded hover:bg-green-900 active:bg-green-700">ACT</button>
+                            <button data-act="ITEM" class="px-1 py-0.5 border border-green-500 rounded hover:bg-green-900 active:bg-green-700">ITEM</button>
+                            <button data-act="SPARE" class="px-1 py-0.5 border border-green-500 rounded hover:bg-green-900 active:bg-green-700">SPARE</button>
+                        </div>
+                        <div id="ralsei-action-status" class="text-[7px] text-green-300 italic">Waiting...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UNDERTALE UI -->
+            <div id="undertale-ui" class="hidden w-full h-full flex-col justify-between">
+                <div id="ut-action-box" class="w-full h-[70px] border-4 border-white rounded p-2 text-xs flex flex-col justify-center bg-black text-white">
+                    <span id="ut-message">* The air grows dense with darkness.</span>
+                </div>
+
+                <div class="flex justify-between items-center text-xs px-2 py-1">
+                    <div class="flex items-center gap-3">
+                        <span class="font-bold text-white">FRISK</span>
+                        <span class="text-yellow-400 text-xs">LV 20</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px]">HP</span>
+                        <div class="w-32 h-4 hp-bar-bg border border-white">
+                            <div id="frisk-hp-fill" class="h-full ut-hp-fill w-full"></div>
+                        </div>
+                        <span id="frisk-hp-text" class="text-xs">99 / 99</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-2 h-[35px]">
+                    <button id="ut-btn-fight" class="border-2 border-orange-500 text-orange-500 font-bold hover:bg-orange-500 hover:text-black rounded text-xs flex items-center justify-center">FIGHT</button>
+                    <button id="ut-btn-act" class="border-2 border-orange-500 text-orange-500 font-bold hover:bg-orange-500 hover:text-black rounded text-xs flex items-center justify-center">ACT</button>
+                    <button id="ut-btn-item" class="border-2 border-orange-500 text-orange-500 font-bold hover:bg-orange-500 hover:text-black rounded text-xs flex items-center justify-center">ITEM</button>
+                    <button id="ut-btn-mercy" class="border-2 border-orange-500 text-orange-500 font-bold hover:bg-orange-500 hover:text-black rounded text-xs flex items-center justify-center">MERCY</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TOUCH CONTROLS -->
+        <div id="touch-controls" class="sm:hidden absolute bottom-1 right-1 flex gap-1 z-40">
+            <div class="grid grid-cols-3 gap-1 w-28 h-20">
+                <div></div>
+                <button id="btn-up" class="touch-btn rounded flex items-center justify-center text-xs">▲</button>
+                <div></div>
+                <button id="btn-left" class="touch-btn rounded flex items-center justify-center text-xs">◀</button>
+                <button id="btn-down" class="touch-btn rounded flex items-center justify-center text-xs">▼</button>
+                <button id="btn-right" class="touch-btn rounded flex items-center justify-center text-xs">▶</button>
+            </div>
+            <div class="flex flex-col gap-1 w-12 justify-center">
+                <button id="btn-z" class="touch-btn h-9 rounded bg-red-900/60 text-white font-bold text-xs border-red-500">Z</button>
+                <button id="btn-x" class="touch-btn h-9 rounded bg-blue-900/60 text-white font-bold text-xs border-blue-500">X</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Web Audio Synthesizer
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioCtx();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'select') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'hit') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                } else if (type === 'laser') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(900, now);
+                    osc.frequency.exponentialRampToValueAtTime(80, now + 0.35);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'damage') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.setValueAtTime(75, now + 0.05);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'shift') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(100, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.15);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'scythe') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(120, now + 0.25);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch(e) {}
+        }
+
+        // Core Game Configuration State
+        let isPhotoshopMode = Math.random() < 0.5; // 50/50 Chance
+        let phase = 1; // 1 = Deltarune UI, 2 = Undertale UI
+        let maxBossHp = isPhotoshopMode ? 500000 : 100000;
+        let bossHp = maxBossHp;
+        let turnState = 'SELECTION'; // SELECTION, TIMING, ENEMY_ATTACK, CUTSCENE
+
+        const SOUL_TYPES = [
+            { name: 'RED', color: '#ff0000' },
+            { name: 'ORANGE', color: '#ffa500' },
+            { name: 'YELLOW', color: '#ffff00' },
+            { name: 'GREEN', color: '#00ff00' },
+            { name: 'CYAN', color: '#00ffff' },
+            { name: 'BLUE', color: '#0000ff' },
+            { name: 'PURPLE', color: '#8a2be2' }
+        ];
+
+        let party = [
+            { name: 'Kris', maxHp: 120, hp: 120, action: null, baseDmg: 3, color: '#0284c7' },
+            { name: 'Susie', maxHp: 140, hp: 140, action: null, baseDmg: 4, color: '#ec4899' },
+            { name: 'Ralsei', maxHp: 100, hp: 100, action: null, baseDmg: 1, color: '#22c55e' }
+        ];
+        let currentMemberIndex = 0;
+        let frisk = { name: 'Frisk', maxHp: 99, hp: 99, lv: 20 };
+
+        let reticles = [];
+
+        // Canvases Setup
+        const arenaCanvas = document.getElementById('arenaCanvas');
+        const arenaCtx = arenaCanvas.getContext('2d');
+        const bossCanvas = document.getElementById('bossCanvas');
+        const bossCtx = bossCanvas.getContext('2d');
+
+        // Player SOUL (Red Determination Heart)
+        const soul = {
+            x: arenaCanvas.width / 2,
+            y: arenaCanvas.height / 2,
+            radius: 8,
+            speed: 4.8,
+            invulnerable: 0
+        };
+
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, z: false, x: false };
+
+        // Attack Logic Engine Variables
+        let attackTimer = 0;
+        let attackDuration = 380;
+        let currentAttackType = 'SANS_TUNNEL'; // Current active attack pattern
+        let attackEntities = []; // Bones, blades, scythes, money symbols, etc.
+        let blasters = [];
+
+        // Attack Types Definition
+        const ATTACK_TYPES = [
+            'SANS_TUNNEL',
+            'SANS_CAROUSEL',
+            'KNIGHT_STORM',
+            'SPAMTON_VACUUM',
+            'JEVIL_SCYTHES',
+            'KING_SHIFT'
+        ];
+
+        function updateModeUI() {
+            const txt = document.getElementById('mode-text');
+            const bossName = document.getElementById('boss-name');
+            const container = document.getElementById('game-container');
+
+            maxBossHp = isPhotoshopMode ? 500000 : 100000;
+            bossHp = maxBossHp;
+
+            if (isPhotoshopMode) {
+                txt.innerText = 'PHOTOSHOP OMEGA GASTER (500,000 HP)';
+                txt.className = 'text-purple-400 glitch-text font-bold';
+                bossName.innerText = 'OMEGA W.D. GASTER';
+                container.classList.add('border-purple-600');
+                container.classList.remove('border-gray-800');
+            } else {
+                txt.innerText = 'STANDARD VOID GASTER (100,000 HP)';
+                txt.className = 'text-cyan-400 font-bold';
+                bossName.innerText = 'W.D. GASTER';
+                container.classList.add('border-gray-800');
+                container.classList.remove('border-purple-600');
+            }
+            updateBossHpDisplay();
+        }
+
+        document.getElementById('btn-toggle-mode').addEventListener('click', () => {
+            isPhotoshopMode = !isPhotoshopMode;
+            restartGame();
+        });
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            restartGame();
+        });
+
+        function restartGame() {
+            phase = 1;
+            turnState = 'SELECTION';
+            party[0].hp = 120; party[1].hp = 140; party[2].hp = 100;
+            frisk.hp = 99;
+            currentMemberIndex = 0;
+            attackEntities = [];
+            blasters = [];
+            reticles = [];
+            document.getElementById('middle-arena-container').style.transform = 'translateY(0px)';
+            
+            document.getElementById('undertale-ui').classList.add('hidden');
+            document.getElementById('undertale-ui').classList.remove('flex');
+            document.getElementById('deltarune-ui').classList.remove('hidden');
+
+            updateModeUI();
+            updatePartyHpDisplay();
+            updateDRActionBox('* Gaster blocks the way into the void.');
+        }
+
+        window.addEventListener('keydown', (e) => {
+            initAudio();
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'x', 'X', 'Enter', ' '].includes(e.key)) e.preventDefault();
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.ArrowUp = true;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.ArrowDown = true;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.ArrowLeft = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.ArrowRight = true;
+            if (e.key === 'z' || e.key === 'Z' || e.key === 'Enter' || e.key === ' ') {
+                if (!keys.z) handleConfirmAction();
+                keys.z = true;
+            }
+            if (e.key === 'x' || e.key === 'X' || e.key === 'Shift') {
+                if (!keys.x) handleCancelAction();
+                keys.x = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.ArrowUp = false;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.ArrowDown = false;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.ArrowLeft = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.ArrowRight = false;
+            if (e.key === 'z' || e.key === 'Z' || e.key === 'Enter' || e.key === ' ') keys.z = false;
+            if (e.key === 'x' || e.key === 'X' || e.key === 'Shift') keys.x = false;
+        });
+
+        function bindTouch(id, keyName) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                initAudio();
+                keys[keyName] = true;
+                if (keyName === 'z') handleConfirmAction();
+                if (keyName === 'x') handleCancelAction();
+            });
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys[keyName] = false;
+            });
+        }
+        bindTouch('btn-up', 'ArrowUp'); bindTouch('btn-down', 'ArrowDown');
+        bindTouch('btn-left', 'ArrowLeft'); bindTouch('btn-right', 'ArrowRight');
+        bindTouch('btn-z', 'z'); bindTouch('btn-x', 'x');
+
+        // Deltarune UI Action Handling
+        document.querySelectorAll('.dr-menu button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                initAudio();
+                const act = e.target.getAttribute('data-act');
+                selectPartyAction(act);
+            });
+        });
+
+        function selectPartyAction(action) {
+            if (turnState !== 'SELECTION' || phase !== 1) return;
+            playSound('select');
+            party[currentMemberIndex].action = action;
+            document.getElementById(`${party[currentMemberIndex].name.toLowerCase()}-action-status`).innerText = `Ready: ${action}`;
+
+            currentMemberIndex++;
+            if (currentMemberIndex < party.length) {
+                updateDRActionBox(`* Select action for ${party[currentMemberIndex].name}.`);
+            } else {
+                startDeltaruneTurnExecution();
+            }
+        }
+
+        function updateDRActionBox(msg) {
+            document.getElementById('dr-message').innerText = msg;
+        }
+
+        function handleCancelAction() {
+            if (turnState === 'SELECTION' && phase === 1 && currentMemberIndex > 0) {
+                playSound('select');
+                currentMemberIndex--;
+                party[currentMemberIndex].action = null;
+                document.getElementById(`${party[currentMemberIndex].name.toLowerCase()}-action-status`).innerText = 'Waiting...';
+                updateDRActionBox(`* Select action for ${party[currentMemberIndex].name}.`);
+            }
+        }
+
+        function startDeltaruneTurnExecution() {
+            const fighters = party.filter(p => p.action === 'FIGHT');
+            if (fighters.length > 0) {
+                turnState = 'TIMING';
+                reticles = [];
+                fighters.forEach((fighter, idx) => {
+                    reticles.push({
+                        member: fighter,
+                        x: 30 + idx * 45,
+                        speed: 7 + Math.random() * 4,
+                        hit: false,
+                        damageDealt: 0
+                    });
+                });
+                updateDRActionBox('* Press [Z] when reticles hit center!');
+            } else {
+                party.forEach(p => {
+                    if (p.action === 'ITEM' || p.action === 'ACT') p.hp = Math.min(p.maxHp, p.hp + 30);
+                });
+                updatePartyHpDisplay();
+                startEnemyTurn();
+            }
+        }
+
+        function handleConfirmAction() {
+            if (turnState === 'CUTSCENE') {
+                closeCutscene();
+                return;
+            }
+
+            if (turnState === 'TIMING') {
+                const unhit = reticles.find(r => !r.hit);
+                if (unhit) {
+                    unhit.hit = true;
+                    playSound('hit');
+                    const center = arenaCanvas.width / 2;
+                    const dist = Math.abs(unhit.x - center);
+
+                    if (phase === 1) {
+                        let mult = dist < 15 ? 2.0 : (dist < 55 ? 1.0 : 0.2);
+                        const finalDmg = Math.round(unhit.member.baseDmg * mult);
+                        unhit.damageDealt = finalDmg;
+                        applyBossDamage(finalDmg);
+                    } else if (phase === 2) {
+                        // Phase 2 Undertale Exact Damage Logic
+                        let dmg = 0;
+                        if (dist < 12) dmg = 6;
+                        else if (dist < 60) dmg = 2;
+                        else dmg = 0;
+
+                        unhit.damageDealt = dmg;
+                        applyBossDamage(dmg);
+                    }
+
+                    if (reticles.every(r => r.hit)) {
+                        setTimeout(() => {
+                            reticles = [];
+                            if (bossHp > 0) startEnemyTurn();
+                        }, 500);
+                    }
+                }
+            }
+        }
+
+        function applyBossDamage(dmg) {
+            bossHp = Math.max(0, bossHp - dmg);
+            updateBossHpDisplay();
+            if (phase === 1 && bossHp <= 50000) {
+                triggerPhase2Transition();
+            }
+        }
+
+        function updateBossHpDisplay() {
+            document.getElementById('boss-hp-text').innerText = `${bossHp} / ${maxBossHp} HP`;
+            const pct = (bossHp / maxBossHp) * 100;
+            document.getElementById('boss-hp-fill').style.width = `${pct}%`;
+        }
+
+        function updatePartyHpDisplay() {
+            document.getElementById('kris-hp-text').innerText = `${party[0].hp}/${party[0].maxHp}`;
+            document.getElementById('susie-hp-text').innerText = `${party[1].hp}/${party[1].maxHp}`;
+            document.getElementById('ralsei-hp-text').innerText = `${party[2].hp}/${party[2].maxHp}`;
+        }
+
+        function updateFriskHpDisplay() {
+            document.getElementById('frisk-hp-text').innerText = `${frisk.hp} / ${frisk.maxHp}`;
+            const pct = (frisk.hp / frisk.maxHp) * 100;
+            document.getElementById('frisk-hp-fill').style.width = `${pct}%`;
+        }
+
+        function triggerPhase2Transition() {
+            turnState = 'CUTSCENE';
+            phase = 2;
+            playSound('damage');
+            document.getElementById('cutscene-overlay').classList.remove('hidden');
+        }
+
+        function closeCutscene() {
+            document.getElementById('cutscene-overlay').classList.add('hidden');
+            document.getElementById('deltarune-ui').classList.add('hidden');
+            document.getElementById('undertale-ui').classList.remove('hidden');
+            document.getElementById('undertale-ui').classList.add('flex');
+            updateFriskHpDisplay();
+            setupUndertaleUI();
+            startEnemyTurn();
+        }
+
+        function setupUndertaleUI() {
+            document.getElementById('ut-btn-fight').onclick = () => {
+                if (turnState !== 'SELECTION') return;
+                playSound('select');
+                turnState = 'TIMING';
+                reticles = [{ x: 30, speed: 10.0, hit: false, damageDealt: 0 }];
+                document.getElementById('ut-message').innerText = '* Strike Gaster with absolute precision!';
+            };
+
+            document.getElementById('ut-btn-act').onclick = () => {
+                if (turnState !== 'SELECTION') return;
+                playSound('select');
+                document.getElementById('ut-message').innerText = '* You try to reason with Gaster... He remains silent.';
+                setTimeout(startEnemyTurn, 1000);
+            };
+
+            document.getElementById('ut-btn-item').onclick = () => {
+                if (turnState !== 'SELECTION') return;
+                playSound('select');
+                frisk.hp = Math.min(frisk.maxHp, frisk.hp + 40);
+                updateFriskHpDisplay();
+                document.getElementById('ut-message').innerText = '* Ate Butterscotch Pie. Fully recovered!';
+                setTimeout(startEnemyTurn, 1000);
+            };
+
+            document.getElementById('ut-btn-mercy').onclick = () => {
+                if (turnState !== 'SELECTION') return;
+                playSound('select');
+                document.getElementById('ut-message').innerText = '* MERCY IS NOT AN OPTION.';
+                setTimeout(startEnemyTurn, 1000);
+            };
+        }
+
+        function startEnemyTurn() {
+            turnState = 'ENEMY_ATTACK';
+            attackTimer = 0;
+            attackEntities = [];
+            blasters = [];
+            document.getElementById('middle-arena-container').style.transform = 'translateY(0px)';
+
+            if (isPhotoshopMode) {
+                currentAttackType = 'OMEGA_CHAOS'; // All attacks combined!
+                attackDuration = 450;
+            } else {
+                // Randomly pick one of the specific boss attacks
+                currentAttackType = ATTACK_TYPES[Math.floor(Math.random() * ATTACK_TYPES.length)];
+                attackDuration = 360;
+            }
+
+            soul.x = arenaCanvas.width / 2;
+            soul.y = arenaCanvas.height / 2;
+
+            showGasterDialogue();
+        }
+
+        function showGasterDialogue() {
+            const bubble = document.getElementById('dialogue-bubble');
+            const text = document.getElementById('dialogue-text');
+            
+            let quotes = {
+                'SANS_TUNNEL': "CURVED SINE OF THE VOID...",
+                'SANS_CAROUSEL': "BLASTERS CIRCLING REALITY...",
+                'KNIGHT_STORM': "THE ROARING BLADES ARRIVE...",
+                'SPAMTON_VACUUM': "BIG SHOTS INTO THE BLACK HOLE!",
+                'JEVIL_SCYTHES': "CHAOS, CHAOS IN THE DARK!",
+                'KING_SHIFT': "THE CHAIN GRABS THE ARENA!",
+                'OMEGA_CHAOS': "EVERY ATTACK IN ONE CONTINUUM!"
+            };
+
+            text.innerText = quotes[currentAttackType] || "DARKER, DARKER, YET DARKER...";
+            bubble.classList.remove('hidden');
+            setTimeout(() => bubble.classList.add('hidden'), 1800);
+        }
+
+        let bossFrame = 0;
+        function renderBoss() {
+            bossFrame++;
+            bossCtx.clearRect(0, 0, bossCanvas.width, bossCanvas.height);
+
+            const cx = bossCanvas.width / 2;
+            const cy = bossCanvas.height / 2 + Math.sin(bossFrame * 0.08) * 8;
+
+            if (isPhotoshopMode) {
+                // PHOTOSHOP OMEGA GASTER VISUALS
+                if (bossFrame % 2 === 0) {
+                    bossCanvas.style.transform = `translate(${(Math.random()-0.5)*8}px, ${(Math.random()-0.5)*8}px)`;
+                }
+
+                SOUL_TYPES.forEach((s, idx) => {
+                    const angle = (bossFrame * 0.05) + (idx * Math.PI * 2 / 7);
+                    const orbX = cx + Math.cos(angle) * 150;
+                    const orbY = cy + Math.sin(angle) * 65;
+
+                    bossCtx.fillStyle = s.color;
+                    bossCtx.shadowColor = s.color;
+                    bossCtx.shadowBlur = 15;
+                    bossCtx.beginPath();
+                    bossCtx.arc(orbX, orbY, 11, 0, Math.PI * 2);
+                    bossCtx.fill();
+                    bossCtx.shadowBlur = 0;
+                });
+
+                bossCtx.strokeStyle = '#22c55e';
+                bossCtx.lineWidth = 8;
+                bossCtx.beginPath();
+                bossCtx.moveTo(cx - 200, 0); bossCtx.lineTo(cx - 70, cy - 20);
+                bossCtx.moveTo(cx + 200, 0); bossCtx.lineTo(cx + 70, cy - 20);
+                bossCtx.stroke();
+
+                bossCtx.fillStyle = '#0f172a';
+                bossCtx.strokeStyle = '#dc2626';
+                bossCtx.lineWidth = 5;
+                bossCtx.fillRect(cx - 75, cy - 75, 150, 110);
+                bossCtx.strokeRect(cx - 75, cy - 75, 150, 110);
+
+                bossCtx.fillStyle = (bossFrame % 6 < 3) ? '#ff0000' : '#ffffff';
+                bossCtx.font = '22px "Press Start 2P"';
+                bossCtx.fillText(bossFrame % 10 < 5 ? "O   O" : "X   X", cx - 45, cy - 25);
+                bossCtx.fillText("WWWWW", cx - 48, cy + 15);
+
+            } else {
+                // STANDARD GASTER VISUALS
+                bossCanvas.style.transform = 'none';
+                bossCtx.fillStyle = '#ffffff';
+                bossCtx.beginPath();
+                bossCtx.ellipse(cx, cy - 20, 28, 38, 0, 0, Math.PI * 2);
+                bossCtx.fill();
+
+                bossCtx.strokeStyle = '#000000';
+                bossCtx.lineWidth = 3;
+                bossCtx.beginPath();
+                bossCtx.moveTo(cx + 8, cy - 35); bossCtx.lineTo(cx + 14, cy - 50);
+                bossCtx.moveTo(cx - 8, cy - 10); bossCtx.lineTo(cx - 12, cy + 5);
+                bossCtx.stroke();
+
+                bossCtx.fillStyle = '#000000';
+                bossCtx.beginPath();
+                bossCtx.arc(cx - 10, cy - 25, 5, 0, Math.PI * 2);
+                bossCtx.arc(cx + 10, cy - 25, 3, 0, Math.PI * 2);
+                bossCtx.fill();
+
+                if (phase === 2) {
+                    bossCtx.fillStyle = '#ff0000';
+                    bossCtx.beginPath();
+                    bossCtx.arc(cx - 10, cy - 25, 2.5, 0, Math.PI * 2);
+                    bossCtx.arc(cx + 10, cy - 25, 1.8, 0, Math.PI * 2);
+                    bossCtx.fill();
+                }
+
+                bossCtx.beginPath();
+                bossCtx.arc(cx, cy - 5, 12, 0.1, Math.PI - 0.1);
+                bossCtx.stroke();
+
+                bossCtx.fillStyle = '#000000';
+                bossCtx.beginPath();
+                bossCtx.moveTo(cx - 30, cy + 15);
+                bossCtx.lineTo(cx + 30, cy + 15);
+                bossCtx.lineTo(cx + 45, cy + 85);
+                bossCtx.lineTo(cx - 45, cy + 85);
+                bossCtx.closePath();
+                bossCtx.fill();
+
+                drawHand(cx - 75 + Math.cos(bossFrame * 0.05) * 12, cy + Math.sin(bossFrame * 0.05) * 12);
+                drawHand(cx + 75 + Math.sin(bossFrame * 0.05) * 12, cy + Math.cos(bossFrame * 0.05) * 12);
+            }
+        }
+
+        function drawHand(x, y) {
+            bossCtx.fillStyle = '#ffffff';
+            bossCtx.beginPath();
+            bossCtx.arc(x, y, 14, 0, Math.PI * 2);
+            bossCtx.fill();
+            bossCtx.fillStyle = '#000000';
+            bossCtx.beginPath();
+            bossCtx.arc(x, y, 5, 0, Math.PI * 2);
+            bossCtx.fill();
+        }
+
+        function drawDeterminationSoul(x, y) {
+            arenaCtx.save();
+            arenaCtx.translate(x, y);
+
+            arenaCtx.fillStyle = '#ff0000';
+            arenaCtx.shadowColor = '#ff0000';
+            arenaCtx.shadowBlur = 8;
+
+            arenaCtx.beginPath();
+            arenaCtx.moveTo(0, 4);
+            arenaCtx.bezierCurveTo(0, 0, -8, -6, -8, -2);
+            arenaCtx.bezierCurveTo(-8, 3, 0, 7, 0, 10);
+            arenaCtx.bezierCurveTo(0, 7, 8, 3, 8, -2);
+            arenaCtx.bezierCurveTo(8, -6, 0, 0, 0, 4);
+            arenaCtx.closePath();
+            arenaCtx.fill();
+
+            arenaCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            arenaCtx.beginPath();
+            arenaCtx.arc(-3, -2, 1.8, 0, Math.PI * 2);
+            arenaCtx.fill();
+
+            arenaCtx.restore();
+        }
+
+        function updateAttackPatterns() {
+            attackTimer++;
+
+            const runSansTunnel = () => {
+                // SANS - Sine Wave Bone Tunnel Path
+                if (attackTimer % 4 === 0) {
+                    const scrollX = arenaCanvas.width;
+                    const centerSineY = (arenaCanvas.height / 2) + Math.sin(attackTimer * 0.06) * 55;
+                    const tunnelGap = 65;
+
+                    // Top Bone Wall
+                    attackEntities.push({
+                        type: 'BONE',
+                        x: scrollX,
+                        y: 0,
+                        w: 12,
+                        h: centerSineY - tunnelGap / 2,
+                        vx: -4.5
+                    });
+
+                    // Bottom Bone Wall
+                    attackEntities.push({
+                        type: 'BONE',
+                        x: scrollX,
+                        y: centerSineY + tunnelGap / 2,
+                        w: 12,
+                        h: arenaCanvas.height - (centerSineY + tunnelGap / 2),
+                        vx: -4.5
+                    });
+                }
+            };
+
+            const runSansCarousel = () => {
+                // SANS - Circular Gaster Blaster Ring Carousel
+                if (attackTimer % 45 === 0) {
+                    const cx = arenaCanvas.width / 2;
+                    const cy = arenaCanvas.height / 2;
+                    const radius = 80;
+                    const angle = attackTimer * 0.08;
+
+                    blasters.push({
+                        x: cx + Math.cos(angle) * radius,
+                        y: cy + Math.sin(angle) * radius,
+                        targetX: cx,
+                        targetY: cy,
+                        charge: 0,
+                        maxCharge: 25,
+                        width: 35
+                    });
+                    playSound('laser');
+                }
+            };
+
+            const runKnightStorm = () => {
+                // ROARING KNIGHT - Dark Blade Arcs & Descending Holy Light Beams
+                if (attackTimer % 20 === 0) {
+                    // Dark Blade Arc
+                    attackEntities.push({
+                        type: 'BLADE',
+                        x: Math.random() < 0.5 ? 0 : arenaCanvas.width,
+                        y: Math.random() * arenaCanvas.height,
+                        vx: (Math.random() < 0.5 ? 6 : -6),
+                        vy: (Math.random() - 0.5) * 3,
+                        angle: Math.random() * Math.PI * 2
+                    });
+                }
+                if (attackTimer % 35 === 0) {
+                    // Light Pillar Beam
+                    attackEntities.push({
+                        type: 'LIGHT_PILLAR',
+                        x: Math.random() * (arenaCanvas.width - 40) + 20,
+                        w: 40,
+                        timer: 0,
+                        warnTime: 20
+                    });
+                }
+            };
+
+            const runSpamtonVacuum = () => {
+                // SPAMTON NEO - PIPIS & Vacuum Sucking Box towards center mouth
+                const centerX = arenaCanvas.width / 2;
+                const centerY = arenaCanvas.height / 2;
+
+                // Gravitational Pull toward Center
+                const dx = centerX - soul.x;
+                const dy = centerY - soul.y;
+                soul.x += dx * 0.025;
+                soul.y += dy * 0.025;
+
+                // Money Symbols ($) & PIPIS Bombs flying inwards
+                if (attackTimer % 12 === 0) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 220;
+                    attackEntities.push({
+                        type: 'MONEY',
+                        x: centerX + Math.cos(angle) * dist,
+                        y: centerY + Math.sin(angle) * dist,
+                        vx: -Math.cos(angle) * 3.5,
+                        vy: -Math.sin(angle) * 3.5,
+                        radius: 8
+                    });
+                }
+            };
+
+            const runJevilScythes = () => {
+                // JEVIL - Devilsknife Giant Spinning Scythes
+                if (attackTimer % 50 === 0) {
+                    attackEntities.push({
+                        type: 'SCYTHE',
+                        x: Math.random() * arenaCanvas.width,
+                        y: Math.random() < 0.5 ? -20 : arenaCanvas.height + 20,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() < 0.5 ? 3 : -3),
+                        rot: 0,
+                        rotSpeed: 0.15,
+                        radius: 28
+                    });
+                    playSound('scythe');
+                }
+            };
+
+            const runKingShift = () => {
+                // KING CHAPTER 1 - Box Grab & Vertical Shifting Arena Frame
+                if (attackTimer % 30 === 0) {
+                    const shiftY = (Math.sin(attackTimer * 0.2) * 28);
+                    document.getElementById('middle-arena-container').style.transform = `translateY(${shiftY}px)`;
+                    playSound('shift');
+                }
+
+                // Rising Bone Spikes from Floor
+                if (attackTimer % 18 === 0) {
+                    attackEntities.push({
+                        type: 'SPIKE',
+                        x: Math.random() * arenaCanvas.width,
+                        y: arenaCanvas.height,
+                        vy: -4.5,
+                        w: 14,
+                        h: 35
+                    });
+                }
+            };
+
+            // Execute specific patterns or OMEGA CHAOS
+            if (currentAttackType === 'SANS_TUNNEL') runSansTunnel();
+            else if (currentAttackType === 'SANS_CAROUSEL') runSansCarousel();
+            else if (currentAttackType === 'KNIGHT_STORM') runKnightStorm();
+            else if (currentAttackType === 'SPAMTON_VACUUM') runSpamtonVacuum();
+            else if (currentAttackType === 'JEVIL_SCYTHES') runJevilScythes();
+            else if (currentAttackType === 'KING_SHIFT') runKingShift();
+            else if (currentAttackType === 'OMEGA_CHAOS') {
+                // Photoshop Mode executes ALL patterns concurrently!
+                runSansTunnel();
+                runSansCarousel();
+                runKnightStorm();
+                runSpamtonVacuum();
+                runJevilScythes();
+                runKingShift();
+            }
+
+            // Update Attack Entities & Collisions
+            attackEntities.forEach((e, idx) => {
+                if (e.type === 'BONE' || e.type === 'SPIKE') {
+                    e.x += (e.vx || 0);
+                    e.y += (e.vy || 0);
+
+                    // AABB Collision with Soul
+                    if (soul.x + soul.radius > e.x && soul.x - soul.radius < e.x + e.w &&
+                        soul.y + soul.radius > e.y && soul.y - soul.radius < e.y + e.h) {
+                        if (soul.invulnerable <= 0) takeDamage(18);
+                    }
+
+                    arenaCtx.fillStyle = '#ffffff';
+                    arenaCtx.fillRect(e.x, e.y, e.w, e.h);
+
+                } else if (e.type === 'BLADE') {
+                    e.x += e.vx; e.y += e.vy;
+                    if (Math.hypot(e.x - soul.x, e.y - soul.y) < soul.radius + 10 && soul.invulnerable <= 0) {
+                        takeDamage(20);
+                    }
+                    arenaCtx.fillStyle = '#a855f7';
+                    arenaCtx.fillRect(e.x - 8, e.y - 2, 16, 4);
+
+                } else if (e.type === 'LIGHT_PILLAR') {
+                    e.timer++;
+                    if (e.timer < e.warnTime) {
+                        arenaCtx.fillStyle = 'rgba(255, 255, 0, 0.25)';
+                        arenaCtx.fillRect(e.x - e.w/2, 0, e.w, arenaCanvas.height);
+                    } else {
+                        arenaCtx.fillStyle = '#ffffff';
+                        arenaCtx.fillRect(e.x - e.w/2, 0, e.w, arenaCanvas.height);
+                        if (Math.abs(soul.x - e.x) < e.w/2 + soul.radius && soul.invulnerable <= 0) {
+                            takeDamage(25);
+                        }
+                    }
+                    if (e.timer > e.warnTime + 12) attackEntities.splice(idx, 1);
+
+                } else if (e.type === 'MONEY') {
+                    e.x += e.vx; e.y += e.vy;
+                    if (Math.hypot(e.x - soul.x, e.y - soul.y) < soul.radius + e.radius && soul.invulnerable <= 0) {
+                        takeDamage(16);
+                    }
+                    arenaCtx.fillStyle = '#22c55e';
+                    arenaCtx.font = '14px "Press Start 2P"';
+                    arenaCtx.fillText('$', e.x - 5, e.y + 5);
+
+                } else if (e.type === 'SCYTHE') {
+                    e.x += e.vx; e.y += e.vy; e.rot += e.rotSpeed;
+                    if (Math.hypot(e.x - soul.x, e.y - soul.y) < soul.radius + e.radius && soul.invulnerable <= 0) {
+                        takeDamage(24);
+                    }
+                    arenaCtx.save();
+                    arenaCtx.translate(e.x, e.y);
+                    arenaCtx.rotate(e.rot);
+                    arenaCtx.strokeStyle = '#ef4444';
+                    arenaCtx.lineWidth = 4;
+                    arenaCtx.beginPath();
+                    arenaCtx.arc(0, 0, e.radius, 0, Math.PI * 1.2);
+                    arenaCtx.stroke();
+                    arenaCtx.restore();
+                }
+
+                // Cleanup bounds
+                if (e.x < -60 || e.x > arenaCanvas.width + 60 || e.y < -60 || e.y > arenaCanvas.height + 60) {
+                    if (e.type !== 'LIGHT_PILLAR') attackEntities.splice(idx, 1);
+                }
+            });
+
+            // Update Blasters
+            blasters.forEach((blaster, idx) => {
+                blaster.charge++;
+                if (blaster.charge > blaster.maxCharge + 12) {
+                    blasters.splice(idx, 1);
+                } else if (blaster.charge > blaster.maxCharge) {
+                    // Fire Beam
+                    arenaCtx.strokeStyle = '#ffffff';
+                    arenaCtx.lineWidth = blaster.width;
+                    arenaCtx.beginPath();
+                    arenaCtx.moveTo(blaster.x, blaster.y);
+                    arenaCtx.lineTo(blaster.targetX, blaster.targetY);
+                    arenaCtx.stroke();
+
+                    // Beam Collision Line Dist
+                    const distToLine = pointToSegmentDistance(
+                        soul.x, soul.y, blaster.x, blaster.y, blaster.targetX, blaster.targetY
+                    );
+                    if (distToLine < blaster.width / 2 + soul.radius && soul.invulnerable <= 0) {
+                        takeDamage(28);
+                    }
+                } else {
+                    // Warning Line
+                    arenaCtx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                    arenaCtx.lineWidth = 2;
+                    arenaCtx.beginPath();
+                    arenaCtx.moveTo(blaster.x, blaster.y);
+                    arenaCtx.lineTo(blaster.targetX, blaster.targetY);
+                    arenaCtx.stroke();
+                }
+            });
+
+            // End Turn Check
+            if (attackTimer >= attackDuration) {
+                turnState = 'SELECTION';
+                attackEntities = [];
+                blasters = [];
+                document.getElementById('middle-arena-container').style.transform = 'translateY(0px)';
+                currentMemberIndex = 0;
+
+                if (phase === 1) {
+                    party.forEach(p => p.action = null);
+                    document.getElementById('kris-action-status').innerText = 'Select Action';
+                    document.getElementById('susie-action-status').innerText = 'Waiting...';
+                    document.getElementById('ralsei-action-status').innerText = 'Waiting...';
+                    updateDRActionBox('* Choose your next move.');
+                } else {
+                    document.getElementById('ut-message').innerText = '* Gaster awaits your next strike.';
+                }
+            }
+        }
+
+        function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+            const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+            if (l2 === 0) return Math.hypot(px - x1, py - y1);
+            let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+        }
+
+        function takeDamage(amount) {
+            playSound('damage');
+            soul.invulnerable = 15;
+
+            if (phase === 1) {
+                const target = party.find(p => p.hp > 0) || party[0];
+                target.hp = Math.max(0, target.hp - amount);
+                updatePartyHpDisplay();
+                if (party.every(p => p.hp <= 0)) {
+                    alert("PARTY ERACED FROM EXISTENCE.");
+                    restartGame();
+                }
+            } else {
+                frisk.hp = Math.max(0, frisk.hp - amount);
+                updateFriskHpDisplay();
+                if (frisk.hp <= 0) {
+                    alert("GAME OVER - DETERMINATION SHATTERED.");
+                    restartGame();
+                }
+            }
+        }
+
+        function renderArena() {
+            arenaCtx.clearRect(0, 0, arenaCanvas.width, arenaCanvas.height);
+
+            if (turnState === 'TIMING') {
+                const cy = arenaCanvas.height / 2;
+                arenaCtx.fillStyle = '#111827';
+                arenaCtx.fillRect(40, cy - 20, arenaCanvas.width - 80, 40);
+                arenaCtx.strokeStyle = '#ffffff';
+                arenaCtx.lineWidth = 3;
+                arenaCtx.strokeRect(40, cy - 20, arenaCanvas.width - 80, 40);
+
+                // Precise Sweet Spot Target
+                arenaCtx.fillStyle = '#ff0000';
+                arenaCtx.fillRect(arenaCanvas.width / 2 - 12, cy - 20, 24, 40);
+
+                reticles.forEach(r => {
+                    if (!r.hit) {
+                        r.x += r.speed;
+                        if (r.x > arenaCanvas.width - 50 || r.x < 50) r.speed *= -1;
+                    }
+
+                    arenaCtx.fillStyle = r.hit ? '#00ff00' : (r.member ? r.member.color : '#ffff00');
+                    arenaCtx.fillRect(r.x - 4, cy - 25, 8, 50);
+
+                    if (r.hit) {
+                        arenaCtx.fillStyle = '#ffffff';
+                        arenaCtx.font = '12px "Press Start 2P"';
+                        arenaCtx.fillText(`${r.damageDealt}`, r.x - 12, cy - 32);
+                    }
+                });
+                return;
+            }
+
+            if (turnState === 'ENEMY_ATTACK') {
+                if (keys.ArrowUp) soul.y = Math.max(15, soul.y - soul.speed);
+                if (keys.ArrowDown) soul.y = Math.min(arenaCanvas.height - 15, soul.y + soul.speed);
+                if (keys.ArrowLeft) soul.x = Math.max(15, soul.x - soul.speed);
+                if (keys.ArrowRight) soul.x = Math.min(arenaCanvas.width - 15, soul.x + soul.speed);
+
+                if (soul.invulnerable > 0) soul.invulnerable--;
+
+                if (soul.invulnerable % 4 < 2) {
+                    drawDeterminationSoul(soul.x, soul.y);
+                }
+
+                updateAttackPatterns();
+            }
+        }
+
+        function gameLoop() {
+            renderBoss();
+            renderArena();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => {
+            updateModeUI();
+            updatePartyHpDisplay();
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
